@@ -18,26 +18,18 @@ def __():
 
 @app.cell
 def __(mo):
-    mo.md(
-        r"""
-        # 📚 Astrobase RAG System
-        
-        Upload PDFs and ask questions about their content using local LLMs.
-        """
-    )
+    mo.md("# 📚 Astrobase RAG System")
     return
 
 
 @app.cell
 def __():
-    # Import all modules
     from src.pdf_processor import PDFProcessor
     from src.embeddings import EmbeddingGenerator
     from src.vector_store import VectorStore, parse_search_results
     from src.llm_interface import LLMInterface, ConversationManager
     from src.config import PDF_DIR
     
-    # Initialize components
     pdf_processor = PDFProcessor()
     embedding_generator = EmbeddingGenerator()
     vector_store = VectorStore()
@@ -62,43 +54,56 @@ def __():
 
 @app.cell
 def __(mo):
-    mo.md("## 📄 Upload Document")
+    mo.md("## Upload PDF")
     return
 
 
 @app.cell
 def __(mo):
-    # File upload widget
     file_upload = mo.ui.file(
         label="Upload PDF",
         filetypes=[".pdf"],
         multiple=False
     )
-    file_upload
     return file_upload,
 
 
 @app.cell
+def __(file_upload):
+    file_upload
+    return
+
+
+@app.cell
 def __(file_upload, mo):
-    # Display upload status
     if file_upload.value:
         uploaded_file = file_upload.value[0]
-        mo.md(f"✅ Uploaded: **{uploaded_file.name}**")
+        upload_status = mo.md(f"Uploaded: {uploaded_file.name}")
     else:
         uploaded_file = None
-        mo.md("*No file uploaded yet*")
-    return uploaded_file,
+        upload_status = mo.md("No file uploaded")
+    return uploaded_file, upload_status
+
+
+@app.cell
+def __(upload_status):
+    upload_status
+    return
 
 
 @app.cell
 def __(mo, uploaded_file):
-    # Create process button
     process_button = mo.ui.button(
         label="Process PDF",
         disabled=not uploaded_file
     )
-    mo.md(f"### Process Document\n\n{process_button}")
     return process_button,
+
+
+@app.cell
+def __(process_button):
+    process_button
+    return
 
 
 @app.cell
@@ -111,93 +116,66 @@ def __(
     uploaded_file,
     vector_store,
 ):
-    # Process PDF when button is clicked
-    processing_output = mo.md("")
+    process_status = mo.md("")
     
+    # Check if button was clicked (value will be truthy when clicked)
     if process_button.value and uploaded_file:
         try:
-            # Save uploaded file
             pdf_path = PDF_DIR / uploaded_file.name
             pdf_path.write_bytes(uploaded_file.contents)
-            
-            # Extract and chunk text
             chunks = pdf_processor.process_pdf(pdf_path)
-            
-            # Generate embeddings
             chunks_with_embeddings = embedding_generator.embed_chunks(chunks)
-            
-            # Store in vector database
             vector_store.add_chunks(chunks_with_embeddings)
-            
-            processing_output = mo.md(f"✅ Successfully processed {len(chunks)} chunks from {uploaded_file.name}")
+            process_status = mo.md(f"✅ Processed {len(chunks)} chunks")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            processing_output = mo.md(f"❌ Error: {str(e)}")
+            process_status = mo.md(f"❌ Error: {str(e)}")
     
-    processing_output
-    return processing_output, pdf_path, chunks, chunks_with_embeddings
+    return process_status,
 
 
 @app.cell
-def __(mo, vector_store):
-    # Document Statistics
-    mo.md("## 📊 Document Statistics")
-    return
-
-
-@app.cell  
-def __(mo, vector_store):
-    # Show statistics
-    try:
-        sources = vector_store.get_all_sources()
-        total_chunks = vector_store.count
-        
-        if sources:
-            doc_list = "\n".join(f"- {source}" for source in sorted(sources))
-            stats_display = mo.md(f"""
-**Documents indexed:** {len(sources)}  
-**Total chunks:** {total_chunks}
-
-**Available documents:**
-{doc_list}
-            """)
-        else:
-            stats_display = mo.md("*No documents indexed yet*")
-    except:
-        stats_display = mo.md("*No documents indexed yet*")
-    
-    stats_display
-    return stats_display, sources, total_chunks, doc_list
-
-
-@app.cell
-def __(mo):
-    mo.md("## 💬 Ask Questions")
+def __(process_status):
+    process_status
     return
 
 
 @app.cell
 def __(mo):
-    # Query input
+    mo.md("## Ask Questions")
+    return
+
+
+@app.cell
+def __(mo):
     query_input = mo.ui.text_area(
-        label="Ask a question about your documents:",
-        placeholder="What is the main topic of the document?",
+        label="Your question:",
+        placeholder="What is this document about?",
         rows=3
     )
-    query_input
     return query_input,
 
 
 @app.cell
+def __(query_input):
+    query_input
+    return
+
+
+@app.cell
 def __(mo, query_input):
-    # Search button
     search_button = mo.ui.button(
-        label="Search & Answer",
+        label="Get Answer",
         disabled=not query_input.value
     )
-    search_button
     return search_button,
+
+
+@app.cell
+def __(search_button):
+    search_button
+    return
 
 
 @app.cell
@@ -211,78 +189,79 @@ def __(
     search_button,
     vector_store,
 ):
-    # Perform search when button is clicked
-    answer_output = mo.md("")
+    answer_display = mo.md("")
     
+    # Check if button was clicked (value will be truthy when clicked)
     if search_button.value and query_input.value:
         try:
-            # Generate query embedding
             query_embedding = embedding_generator.embed_query(query_input.value)
-            
-            # Search vector store
             search_results_raw = vector_store.search(query_embedding)
             search_results = parse_search_results(search_results_raw)
             
-            if not search_results:
-                answer_output = mo.md("❌ No relevant documents found. Please process a PDF first.")
-            else:
-                # Generate response
+            if search_results:
                 answer = llm_interface.generate_response(
                     query_input.value,
                     search_results
                 )
-                
-                # Add to conversation history
                 conversation_manager.add_exchange(query_input.value, answer)
                 
-                # Format results
+                # Format sources
                 sources_text = "\n\n".join([
                     f"**Source {i+1}:** {result.source_file} (Pages: {', '.join(map(str, result.page_numbers))})"
                     for i, result in enumerate(search_results)
                 ])
                 
-                answer_output = mo.md(f"""## 🎯 Answer
+                answer_display = mo.md(f"""
+**Answer:** {answer}
 
-{answer}
-
----
-
-### 📍 Sources
-
-{sources_text}""")
+**Sources:**
+{sources_text}
+                """)
+            else:
+                answer_display = mo.md("No relevant documents found. Please process a PDF first.")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            answer_output = mo.md(f"❌ Error: {str(e)}")
+            answer_display = mo.md(f"❌ Error: {str(e)}")
     
-    answer_output
-    return answer_output, query_embedding, search_results_raw, search_results, answer, sources_text
+    return answer_display,
 
 
 @app.cell
-def __(conversation_manager, mo):
-    # Display conversation history
-    history = conversation_manager.get_formatted_history()
-    if history:
-        mo.md(f"""## 📜 Conversation History
-
-{history}""")
-    else:
-        mo.md("")
-    return history,
+def __(answer_display):
+    answer_display
+    return
 
 
 @app.cell
-def __(mo):
-    mo.md("""
----
+def __(mo, vector_store):
+    # Show document statistics
+    try:
+        sources = vector_store.get_all_sources()
+        total_chunks = vector_store.count
+        
+        if sources:
+            doc_list = "\n".join(f"- {source}" for source in sorted(sources))
+            stats = mo.md(f"""
+## 📊 Document Statistics
 
-### ⚙️ System Requirements
+**Documents indexed:** {len(sources)}  
+**Total chunks:** {total_chunks}
 
-- Ollama must be running (`ollama serve`)
-- Required model must be pulled (`ollama pull llama3`)
-- Python packages must be installed (`uv sync`)
-""")
+**Available documents:**
+{doc_list}
+            """)
+        else:
+            stats = mo.md("## 📊 Document Statistics\n\n*No documents indexed yet*")
+    except:
+        stats = mo.md("## 📊 Document Statistics\n\n*No documents indexed yet*")
+    
+    return stats,
+
+
+@app.cell
+def __(stats):
+    stats
     return
 
 
