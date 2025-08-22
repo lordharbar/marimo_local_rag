@@ -30,7 +30,7 @@ brew install uv
 
 ### 2. Clone and set up the project
 ```bash
-cd /Users/SHB/Documents/CHG/repo/astrobase_marimo_rag
+cd wherever_you_want/astrobase_marimo_rag
 
 # Install dependencies with UV
 uv sync

@@ -112,10 +112,9 @@ def __(
     vector_store,
 ):
     # Process PDF when button is clicked
+    processing_output = mo.md("")
+    
     if process_button.value and uploaded_file:
-        mo.output.clear()
-        mo.output.append(mo.md("🔄 Processing PDF..."))
-        
         try:
             # Save uploaded file
             pdf_path = PDF_DIR / uploaded_file.name
@@ -130,38 +129,46 @@ def __(
             # Store in vector database
             vector_store.add_chunks(chunks_with_embeddings)
             
-            mo.output.clear()
-            mo.output.append(mo.md(f"✅ Successfully processed {len(chunks)} chunks from {uploaded_file.name}"))
+            processing_output = mo.md(f"✅ Successfully processed {len(chunks)} chunks from {uploaded_file.name}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            mo.output.clear()
-            mo.output.append(mo.md(f"❌ Error: {str(e)}"))
-    return
+            processing_output = mo.md(f"❌ Error: {str(e)}")
+    
+    processing_output
+    return processing_output, pdf_path, chunks, chunks_with_embeddings
 
 
 @app.cell
 def __(mo, vector_store):
+    # Document Statistics
     mo.md("## 📊 Document Statistics")
-    
+    return
+
+
+@app.cell  
+def __(mo, vector_store):
+    # Show statistics
     try:
         sources = vector_store.get_all_sources()
         total_chunks = vector_store.count
         
         if sources:
             doc_list = "\n".join(f"- {source}" for source in sorted(sources))
-            mo.md(f"""
-- **Documents indexed:** {len(sources)}
-- **Total chunks:** {total_chunks}
+            stats_display = mo.md(f"""
+**Documents indexed:** {len(sources)}  
+**Total chunks:** {total_chunks}
 
 **Available documents:**
 {doc_list}
-""")
+            """)
         else:
-            mo.md("*No documents indexed yet*")
+            stats_display = mo.md("*No documents indexed yet*")
     except:
-        mo.md("*No documents indexed yet*")
-    return
+        stats_display = mo.md("*No documents indexed yet*")
+    
+    stats_display
+    return stats_display, sources, total_chunks, doc_list
 
 
 @app.cell
@@ -205,10 +212,9 @@ def __(
     vector_store,
 ):
     # Perform search when button is clicked
+    answer_output = mo.md("")
+    
     if search_button.value and query_input.value:
-        mo.output.clear()
-        mo.output.append(mo.md("🔍 Searching and generating answer..."))
-        
         try:
             # Generate query embedding
             query_embedding = embedding_generator.embed_query(query_input.value)
@@ -218,8 +224,7 @@ def __(
             search_results = parse_search_results(search_results_raw)
             
             if not search_results:
-                mo.output.clear()
-                mo.output.append(mo.md("❌ No relevant documents found. Please process a PDF first."))
+                answer_output = mo.md("❌ No relevant documents found. Please process a PDF first.")
             else:
                 # Generate response
                 answer = llm_interface.generate_response(
@@ -236,8 +241,7 @@ def __(
                     for i, result in enumerate(search_results)
                 ])
                 
-                mo.output.clear()
-                mo.output.append(mo.md(f"""## 🎯 Answer
+                answer_output = mo.md(f"""## 🎯 Answer
 
 {answer}
 
@@ -245,13 +249,14 @@ def __(
 
 ### 📍 Sources
 
-{sources_text}"""))
+{sources_text}""")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            mo.output.clear()
-            mo.output.append(mo.md(f"❌ Error: {str(e)}"))
-    return
+            answer_output = mo.md(f"❌ Error: {str(e)}")
+    
+    answer_output
+    return answer_output, query_embedding, search_results_raw, search_results, answer, sources_text
 
 
 @app.cell
@@ -262,7 +267,9 @@ def __(conversation_manager, mo):
         mo.md(f"""## 📜 Conversation History
 
 {history}""")
-    return
+    else:
+        mo.md("")
+    return history,
 
 
 @app.cell
@@ -274,7 +281,7 @@ def __(mo):
 
 - Ollama must be running (`ollama serve`)
 - Required model must be pulled (`ollama pull llama3`)
-- Python packages must be installed (`pip install -r requirements.txt`)
+- Python packages must be installed (`uv sync`)
 """)
     return
 
