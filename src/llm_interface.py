@@ -41,8 +41,19 @@ class LLMInterface:
     def check_model_available(self) -> bool:
         """Check if the model is available locally."""
         try:
-            models = self.client.list()
-            available_models = [m['name'] for m in models['models']]
+            models_response = self.client.list()
+            
+            # Handle the new ListResponse type
+            if hasattr(models_response, 'models'):
+                # New API: models_response.models is a list of model objects
+                available_models = [m.name for m in models_response.models if hasattr(m, 'name')]
+            elif isinstance(models_response, dict) and 'models' in models_response:
+                # Old API: models_response is a dict
+                available_models = [m['name'] for m in models_response['models']]
+            else:
+                print(f"Unknown response type: {type(models_response)}")
+                return False
+            
             return any(self.model in model for model in available_models)
         except Exception as e:
             print(f"Error checking models: {e}")
@@ -107,7 +118,16 @@ class LLMInterface:
                     "num_predict": self.max_tokens,
                 }
             )
-            return response['message']['content']
+            
+            # Handle different response types
+            if hasattr(response, 'message'):
+                # New API: response is a ChatResponse object
+                return response.message.content
+            elif isinstance(response, dict) and 'message' in response:
+                # Old API: response is a dict
+                return response['message']['content']
+            else:
+                raise ValueError(f"Unknown response type: {type(response)}")
     
     def _stream_response(self, messages: Messages) -> Iterator[str]:
         """Stream response tokens."""
@@ -122,8 +142,15 @@ class LLMInterface:
         )
         
         for chunk in stream:
-            if 'message' in chunk and 'content' in chunk['message']:
-                yield chunk['message']['content']
+            # Handle different chunk types
+            if hasattr(chunk, 'message'):
+                # New API: chunk is an object with message attribute
+                if hasattr(chunk.message, 'content'):
+                    yield chunk.message.content
+            elif isinstance(chunk, dict):
+                # Old API: chunk is a dict
+                if 'message' in chunk and 'content' in chunk['message']:
+                    yield chunk['message']['content']
 
 
 @dataclass
