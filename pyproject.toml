@@ -1,0 +1,21 @@
+[project]
+name = "astrobase-marimo-rag"
+version = "0.1.0"
+description = "A local tool for your own RAG operations using a local llm. Just like the farmer's market."
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=0.4.0",
+    "ipython>=9.4.0",
+    "langchain>=0.1.0",
+    "langchain-community>=0.1.0",
+    "marimo>=0.10.0",
+    "numpy>=1.24.0",
+    "ollama>=0.1.0",
+    "pandas>=2.0.0",
+    "pathlib>=1.0.1",
+    "pdfplumber>=0.10.0",
+    "pypdf>=4.0.0",
+    "python-dotenv>=1.0.0",
+    "sentence-transformers>=2.2.0",
+    "tqdm>=4.65.0",
+]

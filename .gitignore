@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Marimo
+.marimo/
+*.marimo.html
+
+# Data files
+data/pdfs/*
+!data/pdfs/.gitkeep
+data/vectordb/*
+!data/vectordb/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Model cache
+models/
+.cache/
