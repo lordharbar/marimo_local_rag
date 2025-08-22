@@ -121,9 +121,7 @@ class PDFProcessor:
                 chunk_index += 1
             
             # Move start position with overlap
-            start = end - self.chunk_overlap
-            if start <= 0:
-                start = end
+            start += self.chunk_size - self.chunk_overlap
         
         return chunks
     
