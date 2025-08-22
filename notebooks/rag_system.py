@@ -13,256 +13,191 @@ def __():
     # Add src to path
     sys.path.insert(0, str(Path(__file__).parent.parent))
     
-    return mo, sys, Path
+    # Import the RAG system
+    from src.rag_helpers import rag_system
+    
+    return mo, sys, Path, rag_system
 
 
 @app.cell
 def __(mo):
-    mo.md("# 📚 Astrobase RAG System")
+    mo.md("# 📚 Astrobase RAG System\n\nUpload PDFs and ask questions about their content using local LLMs.")
     return
 
 
 @app.cell
-def __():
-    from src.pdf_processor import PDFProcessor
-    from src.embeddings import EmbeddingGenerator
-    from src.vector_store import VectorStore, parse_search_results
-    from src.llm_interface import LLMInterface, ConversationManager
-    from src.config import PDF_DIR
-    
-    pdf_processor = PDFProcessor()
-    embedding_generator = EmbeddingGenerator()
-    vector_store = VectorStore()
-    llm_interface = LLMInterface()
-    conversation_manager = ConversationManager()
-    
-    return (
-        ConversationManager,
-        EmbeddingGenerator,
-        LLMInterface,
-        PDFProcessor,
-        VectorStore,
-        parse_search_results,
-        PDF_DIR,
-        pdf_processor,
-        embedding_generator,
-        vector_store,
-        llm_interface,
-        conversation_manager,
-    )
-
-
-@app.cell
 def __(mo):
-    mo.md("## Upload PDF")
+    mo.md("## 📄 Upload Document")
     return
 
 
 @app.cell
 def __(mo):
     file_upload = mo.ui.file(
-        label="Upload PDF",
+        label="Select a PDF file",
         filetypes=[".pdf"],
         multiple=False
     )
+    file_upload
     return file_upload,
 
 
 @app.cell
-def __(file_upload):
-    file_upload
-    return
-
-
-@app.cell
 def __(file_upload, mo):
+    # Display upload status
     if file_upload.value:
         uploaded_file = file_upload.value[0]
-        upload_status = mo.md(f"Uploaded: {uploaded_file.name}")
+        upload_display = mo.md(f"✅ **File ready:** {uploaded_file.name}")
     else:
         uploaded_file = None
-        upload_status = mo.md("No file uploaded")
-    return uploaded_file, upload_status
-
-
-@app.cell
-def __(upload_status):
-    upload_status
-    return
+        upload_display = mo.md("*No file selected*")
+    
+    upload_display
+    return uploaded_file, upload_display
 
 
 @app.cell
 def __(mo, uploaded_file):
+    # Process button
     process_button = mo.ui.button(
         label="Process PDF",
-        disabled=not uploaded_file
+        disabled=not uploaded_file,
+        kind="success"
     )
+    process_button
     return process_button,
 
 
 @app.cell
-def __(process_button):
-    process_button
-    return
-
-
-@app.cell
-def __(
-    PDF_DIR,
-    embedding_generator,
-    mo,
-    pdf_processor,
-    process_button,
-    uploaded_file,
-    vector_store,
-):
-    process_status = mo.md("")
+def __(mo, process_button, rag_system, uploaded_file):
+    # Process the PDF when button is clicked
+    process_result = mo.md("")
     
-    # Check if button was clicked (value will be truthy when clicked)
     if process_button.value and uploaded_file:
-        try:
-            pdf_path = PDF_DIR / uploaded_file.name
-            pdf_path.write_bytes(uploaded_file.contents)
-            chunks = pdf_processor.process_pdf(pdf_path)
-            chunks_with_embeddings = embedding_generator.embed_chunks(chunks)
-            vector_store.add_chunks(chunks_with_embeddings)
-            process_status = mo.md(f"✅ Processed {len(chunks)} chunks")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            process_status = mo.md(f"❌ Error: {str(e)}")
+        # Show processing status
+        mo.output.replace(mo.md("🔄 Processing PDF... Please wait..."))
+        
+        # Process the file
+        success, message, chunk_count = rag_system.process_pdf(
+            uploaded_file.name,
+            uploaded_file.contents
+        )
+        
+        # Show result
+        if success:
+            process_result = mo.md(f"✅ **Success!** {message}")
+        else:
+            process_result = mo.md(f"❌ **Error:** {message}")
+        
+        mo.output.replace(process_result)
     
-    return process_status,
+    process_result
+    return process_result, success, message, chunk_count
 
 
 @app.cell
-def __(process_status):
-    process_status
+def __(mo):
+    mo.md("## 💬 Ask Questions")
     return
 
 
 @app.cell
 def __(mo):
-    mo.md("## Ask Questions")
-    return
-
-
-@app.cell
-def __(mo):
+    # Question input
     query_input = mo.ui.text_area(
-        label="Your question:",
-        placeholder="What is this document about?",
+        label="Enter your question:",
+        placeholder="What is the main topic of the document?",
         rows=3
     )
+    query_input
     return query_input,
 
 
 @app.cell
-def __(query_input):
-    query_input
-    return
-
-
-@app.cell
 def __(mo, query_input):
-    search_button = mo.ui.button(
+    # Answer button
+    answer_button = mo.ui.button(
         label="Get Answer",
-        disabled=not query_input.value
+        disabled=not query_input.value,
+        kind="primary"
     )
-    return search_button,
+    answer_button
+    return answer_button,
 
 
 @app.cell
-def __(search_button):
-    search_button
-    return
-
-
-@app.cell
-def __(
-    conversation_manager,
-    embedding_generator,
-    llm_interface,
-    mo,
-    parse_search_results,
-    query_input,
-    search_button,
-    vector_store,
-):
-    answer_display = mo.md("")
+def __(answer_button, mo, query_input, rag_system):
+    # Generate answer when button is clicked
+    answer_result = mo.md("")
     
-    # Check if button was clicked (value will be truthy when clicked)
-    if search_button.value and query_input.value:
-        try:
-            query_embedding = embedding_generator.embed_query(query_input.value)
-            search_results_raw = vector_store.search(query_embedding)
-            search_results = parse_search_results(search_results_raw)
-            
-            if search_results:
-                answer = llm_interface.generate_response(
-                    query_input.value,
-                    search_results
-                )
-                conversation_manager.add_exchange(query_input.value, answer)
-                
-                # Format sources
-                sources_text = "\n\n".join([
-                    f"**Source {i+1}:** {result.source_file} (Pages: {', '.join(map(str, result.page_numbers))})"
-                    for i, result in enumerate(search_results)
-                ])
-                
-                answer_display = mo.md(f"""
-**Answer:** {answer}
-
-**Sources:**
-{sources_text}
-                """)
-            else:
-                answer_display = mo.md("No relevant documents found. Please process a PDF first.")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            answer_display = mo.md(f"❌ Error: {str(e)}")
-    
-    return answer_display,
-
-
-@app.cell
-def __(answer_display):
-    answer_display
-    return
-
-
-@app.cell
-def __(mo, vector_store):
-    # Show document statistics
-    try:
-        sources = vector_store.get_all_sources()
-        total_chunks = vector_store.count
+    if answer_button.value and query_input.value:
+        # Show processing status
+        mo.output.replace(mo.md("🤔 Thinking..."))
         
-        if sources:
-            doc_list = "\n".join(f"- {source}" for source in sorted(sources))
-            stats = mo.md(f"""
-## 📊 Document Statistics
-
-**Documents indexed:** {len(sources)}  
-**Total chunks:** {total_chunks}
-
-**Available documents:**
-{doc_list}
-            """)
+        # Get answer
+        success, answer, sources = rag_system.answer_question(query_input.value)
+        
+        if success:
+            # Format sources
+            if sources:
+                sources_text = "\n\n**📍 Sources:**\n"
+                for i, source in enumerate(sources, 1):
+                    pages = ", ".join(map(str, source["pages"]))
+                    sources_text += f"- {source['file']} (Pages: {pages})\n"
+            else:
+                sources_text = ""
+            
+            answer_result = mo.md(f"## 🎯 Answer\n\n{answer}{sources_text}")
         else:
-            stats = mo.md("## 📊 Document Statistics\n\n*No documents indexed yet*")
-    except:
-        stats = mo.md("## 📊 Document Statistics\n\n*No documents indexed yet*")
+            answer_result = mo.md(f"❌ {answer}")
+        
+        mo.output.replace(answer_result)
     
-    return stats,
+    answer_result
+    return answer_result, success, answer, sources
 
 
 @app.cell
-def __(stats):
-    stats
+def __(mo):
+    mo.md("## 📊 System Status")
     return
+
+
+@app.cell
+def __(mo, rag_system):
+    # Show statistics using the Statistics dataclass
+    stats = rag_system.get_statistics()
+    
+    if stats.success and stats.num_documents > 0:
+        doc_list = "\n".join([f"- {doc}" for doc in stats.documents])
+        stats_display = mo.md(f"""
+**Documents indexed:** {stats.num_documents}  
+**Total chunks:** {stats.total_chunks}
+
+**Files:**
+{doc_list}
+        """)
+    else:
+        stats_display = mo.md("*No documents indexed yet*")
+    
+    stats_display
+    return stats, stats_display
+
+
+@app.cell
+def __(mo, rag_system):
+    # Clear database button
+    clear_button = mo.ui.button(
+        label="Clear Database",
+        kind="danger"
+    )
+    
+    if clear_button.value:
+        success, message = rag_system.clear_database()
+        mo.md(f"{'✅' if success else '❌'} {message}")
+    
+    clear_button
+    return clear_button, success, message
 
 
 if __name__ == "__main__":
