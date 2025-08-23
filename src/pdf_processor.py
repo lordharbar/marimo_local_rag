@@ -1,7 +1,7 @@
 """PDF processing and text extraction utilities."""
 
 from pathlib import Path
-from typing import TypeAlias
+from typing import TypeAlias, Optional
 from dataclasses import dataclass, field
 import pypdf
 import pdfplumber
@@ -17,7 +17,7 @@ ChunkId: TypeAlias = str
 @dataclass
 class TextChunk:
     """Represents a chunk of text from a PDF."""
-    
+
     content: str
     source_file: str
     page_numbers: list[PageNumber]
@@ -28,39 +28,39 @@ class TextChunk:
 @dataclass
 class PDFProcessor:
     """Handles PDF text extraction and chunking."""
-    
+
     chunk_size: int = CHUNK_SIZE
     chunk_overlap: int = CHUNK_OVERLAP
     min_chunk_size: int = MIN_CHUNK_SIZE
-    
+
     def extract_text_pypdf(self, pdf_path: Path) -> dict[PageNumber, str]:
         """Extract text from PDF using pypdf."""
         page_texts: dict[PageNumber, str] = {}
-        
+
         with open(pdf_path, 'rb') as file:
             pdf_reader = pypdf.PdfReader(file)
             total_pages = len(pdf_reader.pages)
-            
+
             for page_num in tqdm(range(total_pages), desc="Extracting pages"):
                 page = pdf_reader.pages[page_num]
                 text = page.extract_text()
-                if text.strip():
+                if text and text.strip():
                     page_texts[page_num + 1] = text
-        
+
         return page_texts
-    
+
     def extract_text_pdfplumber(self, pdf_path: Path) -> dict[PageNumber, str]:
         """Extract text from PDF using pdfplumber (better for tables)."""
         page_texts: dict[PageNumber, str] = {}
-        
+
         with pdfplumber.open(pdf_path) as pdf:
             for page_num, page in enumerate(tqdm(pdf.pages, desc="Extracting pages")):
                 text = page.extract_text()
                 if text and text.strip():
                     page_texts[page_num + 1] = text
-        
+
         return page_texts
-    
+
     def extract_text(self, pdf_path: Path, method: str = "pypdf") -> dict[PageNumber, str]:
         """Extract text from PDF using specified method."""
         if method == "pypdf":
@@ -69,29 +69,28 @@ class PDFProcessor:
             return self.extract_text_pdfplumber(pdf_path)
         else:
             raise ValueError(f"Unknown extraction method: {method}")
-    
+
     def create_chunks(self, page_texts: dict[PageNumber, str], source_file: str) -> list[TextChunk]:
         """Split text into overlapping chunks."""
         chunks: list[TextChunk] = []
-        
+
         # Combine all pages into one text with page markers
         full_text = ""
         page_map: list[tuple[int, PageNumber]] = []  # (char_position, page_number)
-        
+
         for page_num, text in sorted(page_texts.items()):
             start_pos = len(full_text)
             full_text += f"\n[Page {page_num}]\n{text}"
             page_map.append((start_pos, page_num))
-        
+
         # Create chunks with overlap
         start = 0
         chunk_index = 0
-        
+
         while start < len(full_text):
-            # Find end position
             end = start + self.chunk_size
-            
-            # Try to break at sentence boundary
+
+            # Try to break at a sentence boundary
             if end < len(full_text):
                 # Look for sentence end markers
                 for marker in ['. ', '.\n', '! ', '!\n', '? ', '?\n']:
@@ -99,13 +98,12 @@ class PDFProcessor:
                     if last_marker != -1:
                         end = last_marker + len(marker)
                         break
-            
+
             chunk_text = full_text[start:end].strip()
-            
+
             if len(chunk_text) >= self.min_chunk_size:
-                # Determine which pages this chunk spans
                 chunk_pages = self._get_pages_for_chunk(start, end, page_map)
-                
+
                 chunk = TextChunk(
                     content=chunk_text,
                     source_file=source_file,
@@ -119,40 +117,49 @@ class PDFProcessor:
                 )
                 chunks.append(chunk)
                 chunk_index += 1
+
+            # --- CRITICAL BUG FIX ---
+            # Ensure the next start position always moves forward to prevent infinite loops.
+            # If the created chunk is smaller than the overlap, the next window
+            # should start immediately after the current chunk ends.
+            next_start = end - self.chunk_overlap
+            if next_start <= start:
+                start = end
+            else:
+                start = next_start
             
-            # Move start position with overlap
-            start += self.chunk_size - self.chunk_overlap
-        
+            if start >= len(full_text):
+                break
+
         return chunks
-    
+
     def _get_pages_for_chunk(
-        self, 
-        start: int, 
-        end: int, 
+        self,
+        start: int,
+        end: int,
         page_map: list[tuple[int, PageNumber]]
     ) -> list[PageNumber]:
         """Determine which pages a chunk spans."""
         pages: set[PageNumber] = set()
-        
+
         for i, (pos, page_num) in enumerate(page_map):
             next_pos = page_map[i + 1][0] if i + 1 < len(page_map) else float('inf')
-            
+
             # Check if chunk overlaps with this page
             if start < next_pos and end > pos:
                 pages.add(page_num)
-        
+
         return sorted(list(pages))
-    
-    def process_pdf(self, pdf_path: Path, method: str = "pypdf") -> list[TextChunk]:
+
+    def process_pdf(self, pdf_path: Path, source_name: Optional[str] = None, method: str = "pypdf") -> list[TextChunk]:
         """Complete pipeline to process a PDF into chunks."""
-        print(f"Processing PDF: {pdf_path.name}")
-        
-        # Extract text
+        display_name = source_name or pdf_path.name
+        print(f"Processing PDF: {display_name}")
+
         page_texts = self.extract_text(pdf_path, method)
         print(f"Extracted text from {len(page_texts)} pages")
-        
-        # Create chunks
-        chunks = self.create_chunks(page_texts, pdf_path.name)
+
+        chunks = self.create_chunks(page_texts, display_name)
         print(f"Created {len(chunks)} chunks")
-        
+
         return chunks

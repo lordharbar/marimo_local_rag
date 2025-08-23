@@ -30,6 +30,12 @@ EMBEDDING_MODEL: ModelName = "all-MiniLM-L6-v2"  # Fast and lightweight
 VECTOR_DB_NAME = "astrobase_rag"
 COLLECTION_NAME = "documents"
 TOP_K_RESULTS = 5  # Number of chunks to retrieve
+VECTOR_DB_BATCH_SIZE = 100 # Batch size for adding documents
+
+# Metadata keys (used in vector_store.py)
+METADATA_SOURCE_KEY = "source_file"
+METADATA_PAGES_KEY = "page_numbers"
+METADATA_CHUNK_INDEX_KEY = "chunk_index"
 
 # LLM settings
 LLM_MODEL: ModelName = "llama3"  # Ollama model name
@@ -41,7 +47,7 @@ LLM_CONTEXT_WINDOW = 4096
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # Prompt templates
-SYSTEM_PROMPT = """You are a helpful assistant that answers questions based on the provided context. 
+SYSTEM_PROMPT = """You are a helpful assistant that answers questions based on the provided context.
 Always cite the specific parts of the context that support your answer.
 If the context doesn't contain enough information to answer the question, say so clearly."""
 
