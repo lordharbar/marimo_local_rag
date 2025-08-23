@@ -21,6 +21,7 @@ ClearResult: TypeAlias = tuple[bool, str]
 @dataclass
 class Statistics:
     """Statistics about indexed documents."""
+
     success: bool
     num_documents: int
     total_chunks: int
@@ -35,7 +36,9 @@ class RAGSystem:
     embedding_generator: EmbeddingGenerator = field(default_factory=EmbeddingGenerator)
     vector_store: VectorStore = field(default_factory=VectorStore)
     llm_interface: LLMInterface = field(default_factory=LLMInterface)
-    conversation_manager: ConversationManager = field(default_factory=ConversationManager)
+    conversation_manager: ConversationManager = field(
+        default_factory=ConversationManager
+    )
 
     def process_pdf(self, file_name: str, file_contents: bytes) -> ProcessResult:
         """
@@ -61,7 +64,11 @@ class RAGSystem:
             print(f"Created {len(chunks)} chunks")
 
             if not chunks:
-                return False, f"No text could be extracted from the PDF: {file_name}", None
+                return (
+                    False,
+                    f"No text could be extracted from the PDF: {file_name}",
+                    None,
+                )
 
             # Generate embeddings
             print("Generating embeddings...")
@@ -73,7 +80,11 @@ class RAGSystem:
             self.vector_store.add_chunks(chunks_with_embeddings)
             print(f"Successfully stored chunks in vector database")
 
-            return True, f"Successfully processed {len(chunks)} chunks from {file_name}", len(chunks)
+            return (
+                True,
+                f"Successfully processed {len(chunks)} chunks from {file_name}",
+                len(chunks),
+            )
 
         except Exception as e:
             error_msg = f"Error processing PDF '{file_name}': {e!s}"
@@ -97,7 +108,11 @@ class RAGSystem:
             print(f"Processing question: {question}")
 
             if self.vector_store.count == 0:
-                return False, "No documents have been indexed. Please upload and process a PDF first.", None
+                return (
+                    False,
+                    "No documents have been indexed. Please upload and process a PDF first.",
+                    None,
+                )
 
             print("Generating query embedding...")
             query_embedding = self.embedding_generator.embed_query(question)
@@ -107,7 +122,11 @@ class RAGSystem:
             search_results = parse_search_results(search_results_raw)
 
             if not search_results:
-                return True, "I could not find any relevant information in the indexed documents to answer your question.", []
+                return (
+                    True,
+                    "I could not find any relevant information in the indexed documents to answer your question.",
+                    [],
+                )
 
             print(f"Found {len(search_results)} relevant chunks")
 
@@ -116,10 +135,7 @@ class RAGSystem:
             self.conversation_manager.add_exchange(question, answer)
 
             sources = [
-                {
-                    "file": result.source_file,
-                    "pages": list(result.page_numbers)
-                }
+                {"file": result.source_file, "pages": list(result.page_numbers)}
                 for result in search_results
             ]
 
@@ -141,21 +157,25 @@ class RAGSystem:
                 success=True,
                 num_documents=len(sources),
                 total_chunks=total_chunks,
-                documents=sorted(list(sources)) if sources else []
+                documents=sorted(list(sources)) if sources else [],
             )
         except Exception as e:
             print(f"Error getting statistics: {e}")
-            return Statistics(success=False, num_documents=0, total_chunks=0, documents=[])
+            return Statistics(
+                success=False, num_documents=0, total_chunks=0, documents=[]
+            )
 
     def clear_database(self) -> ClearResult:
         """Clear the vector database and conversation history."""
         try:
             current_collection_name = self.vector_store.collection_name
             self.vector_store.clear()
-            self.vector_store = VectorStore(collection_name=current_collection_name) # Re-initialize
+            self.vector_store = VectorStore(
+                collection_name=current_collection_name
+            )  # Re-initialize
             self.conversation_manager.clear()
             # Also clear the PDF directory for a full reset
-            for pdf_file in PDF_DIR.glob('*'):
+            for pdf_file in PDF_DIR.glob("*"):
                 pdf_file.unlink()
             return True, "Database and stored PDFs cleared successfully"
         except Exception as e:

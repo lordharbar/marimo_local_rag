@@ -48,12 +48,13 @@ class VectorStore:
         """Get or create the collection."""
         if self._collection is None:
             self._collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"hnsw:space": "cosine"}
+                name=self.collection_name, metadata={"hnsw:space": "cosine"}
             )
         return self._collection
 
-    def add_chunks(self, chunks_with_embeddings: list[tuple[TextChunk, Embedding]]) -> None:
+    def add_chunks(
+        self, chunks_with_embeddings: list[tuple[TextChunk, Embedding]]
+    ) -> None:
         """Add chunks and their embeddings to the vector store."""
         if not chunks_with_embeddings:
             return
@@ -82,12 +83,14 @@ class VectorStore:
                 ids=ids[i:end],
                 embeddings=embeddings[i:end],
                 documents=documents[i:end],
-                metadatas=metadatas[i:end]
+                metadatas=metadatas[i:end],
             )
 
         print(f"Added {len(ids)} chunks to vector store")
 
-    def search(self, query_embedding: Embedding, top_k: int | None = None) -> QueryResult:
+    def search(
+        self, query_embedding: Embedding, top_k: int | None = None
+    ) -> QueryResult:
         """Search for similar chunks."""
         if top_k is None:
             top_k = self.top_k
@@ -98,7 +101,7 @@ class VectorStore:
         results = self.collection.query(
             query_embeddings=[query_embedding.tolist()],
             n_results=min(top_k, self.count),
-            include=["documents", "metadatas", "distances"]
+            include=["documents", "metadatas", "distances"],
         )
 
         # --- BUG FIX ---
@@ -109,7 +112,7 @@ class VectorStore:
         return {
             "documents": results["documents"][0],
             "metadatas": results["metadatas"][0],
-            "distances": results["distances"][0]
+            "distances": results["distances"][0],
         }
 
     def get_all_sources(self) -> set[str]:
@@ -162,7 +165,7 @@ class SearchResult:
             source_file=metadata.get(METADATA_SOURCE_KEY, "Unknown"),
             page_numbers=page_numbers,
             distance=distance,
-            metadata=metadata
+            metadata=metadata,
         )
 
 
@@ -173,7 +176,7 @@ def parse_search_results(query_result: QueryResult) -> list[SearchResult]:
     for doc, meta, dist in zip(
         query_result.get("documents", []),
         query_result.get("metadatas", []),
-        query_result.get("distances", [])
+        query_result.get("distances", []),
     ):
         result = SearchResult.from_query_result(doc, meta, dist)
         results.append(result)
